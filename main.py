@@ -1873,6 +1873,12 @@ Args:
     tag_stream: true if tag stream is on, false otherwise
 Returns:
     job_uuid
+Method description:
+    - get request json data
+    - check_template_parameters
+    - get template uid
+    - CALL data_catalog_utils to get template id
+    - ...
 """
 @app.route("/static_asset_tags", methods=['POST'])
 def static_asset_tags():
