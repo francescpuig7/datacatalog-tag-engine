@@ -21,16 +21,41 @@ from google.cloud import bigquery
 from google.cloud import firestore
 import constants
 
+
+class FakeDb:
+    def __init__(self):
+        pass
+
+    def collection(self, collection_path: str):
+        return FakeObj(collection_path).document(collection_path)
+
+
+class FakeObj:
+    def __init__(self, collection_path):
+        self.doc = collection_path
+
+    def document(self, collection_path):
+        return FakeObj
+
+    def get(self):
+        return True
+
+
 class TagEngineUtils:
     
     def __init__(self):
-        
-        self.db = firestore.Client()
+        self.db = FakeDb()
         
         config = configparser.ConfigParser()
         config.read("tagengine.ini")
-        
+
     def read_default_tag_template_settings(self):
+
+        settings = {}
+        exists = False
+        return exists, settings
+
+    def read_default_tag_template_settings_(self):
         
         settings = {}
         exists = False
