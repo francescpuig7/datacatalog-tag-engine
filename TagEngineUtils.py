@@ -328,9 +328,12 @@ class TagEngineUtils:
                 template_exists = True
         
         return (template_exists, template_uuid)
-        
-    
+
     def write_tag_template(self, template_id, template_project, template_region):
+        template_uuid = uuid.uuid1().hex
+        return template_uuid
+
+    def write_tag_template_(self, template_id, template_project, template_region):
         
         template_exists, template_uuid = self.read_tag_template(template_id, template_project, template_region)
         
