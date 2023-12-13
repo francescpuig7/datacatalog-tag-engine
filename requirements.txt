@@ -1,7 +1,7 @@
 Flask==2.3.2
-google-cloud-datacatalog==3.7.1
-google-cloud-bigquery
-google-cloud-core
+google-cloud-datacatalog==3.17.0
+google-cloud-bigquery==3.13.0
+google-cloud-core==2.3.3
 google-cloud-firestore==2.3.4
 google-cloud-storage
 google-cloud-tasks==2.7.1
