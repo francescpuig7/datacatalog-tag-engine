@@ -314,6 +314,15 @@ class TagEngineUtils:
     def write_tag_template(self, template_id, template_project, template_region):
         """Wrapped"""
         template_uuid = uuid.uuid1().hex
+
+        doc_ref = self.db.collection('tag_templates').document(template_uuid)
+        doc_ref.set({
+            'template_uuid': template_uuid,
+            'template_id': template_id,
+            'template_project': template_project,
+            'template_region': template_region
+        })
+
         return template_uuid
 
     def write_tag_template_(self, template_id, template_project, template_region):
@@ -332,7 +341,7 @@ class TagEngineUtils:
                 'template_project': template_project,
                 'template_region': template_region
             })
-                                   
+
         return template_uuid
 
     def write_static_asset_config(self, config_status, fields, included_assets_uris, excluded_assets_uris,
