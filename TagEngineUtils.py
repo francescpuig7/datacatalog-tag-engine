@@ -19,26 +19,8 @@ from datetime import timedelta
 import DataCatalogUtils as dc
 from google.cloud import bigquery
 from google.cloud import firestore
+from FakeDb import FakeDb
 import constants
-
-
-class FakeDb:
-    def __init__(self):
-        pass
-
-    def collection(self, collection_path: str):
-        return FakeObj(collection_path).document(collection_path)
-
-
-class FakeObj:
-    def __init__(self, collection_path):
-        self.doc = collection_path
-
-    def document(self, collection_path):
-        return FakeObj
-
-    def get(self):
-        return True
 
 
 class TagEngineUtils:
@@ -330,6 +312,7 @@ class TagEngineUtils:
         return (template_exists, template_uuid)
 
     def write_tag_template(self, template_id, template_project, template_region):
+        """Wrapped"""
         template_uuid = uuid.uuid1().hex
         return template_uuid
 
@@ -1132,7 +1115,7 @@ class TagEngineUtils:
         return combined_configs
         
     
-    def read_config(self, config_uuid, config_type, reformat=False):
+    def read_config_(self, config_uuid, config_type, reformat=False):
                 
         config_result = {}
         coll_name = self.lookup_config_collection(config_type)
@@ -1146,6 +1129,20 @@ class TagEngineUtils:
             if reformat and config_type == 'EXPORT_TAG':
                 config_result = self.format_source_projects(config_result)
             
+        return config_result
+
+    def read_config(self, config_uuid, config_type, reformat=False):
+        """Wrapped"""
+
+        config_result = {}
+        coll_name = self.lookup_config_collection(config_type)
+
+        config_ref = self.db.collection(coll_name).document(config_uuid)
+        config_result = config_ref.get()
+
+        if config_result and reformat and config_type == 'EXPORT_TAG':
+                config_result = self.format_source_projects(config_result)
+
         return config_result
         
     

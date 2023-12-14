@@ -2831,7 +2831,118 @@ def _split_work():
     
     resp = jsonify(success=True)
     return resp
-    
+
+
+def run_sync_task(config_type, config, data):
+    print('*** enter run_sync_task ***')
+
+    json = data
+    config_uuid = json['config_uuid']
+    config_type = json['config_type']
+
+    if 'uri' in json:
+        uri = json['uri']
+    else:
+        uri = None
+        # print('uri: ', uri)
+
+    if 'tag_extract' in json:
+        tag_extract = json['tag_extract']
+        # print('tag_extract: ', tag_extact)
+    else:
+        tag_extract = None
+
+    # retrieve the config
+    config = teu.read_config(config_uuid, config_type)
+    print('config: ', config)
+
+    if config_type == 'EXPORT_TAG':
+        dcu = dc.DataCatalogUtils()
+
+    elif config_type == 'IMPORT_TAG':
+
+        if 'template_id' not in config or 'template_project' not in config or 'template_region' not in config:
+            response = {
+                "status": "error",
+                "message": "Request JSON is missing required template parameters",
+            }
+            return response
+
+        dcu = dc.DataCatalogUtils(config['template_id'], config['template_project'], config['template_region'])
+
+    elif config_type == 'RESTORE_TAG':
+
+        if 'target_template_id' not in config or 'target_template_project' not in config or 'target_template_region' not in config:
+            response = {
+                "status": "error",
+                "message": "Request JSON is missing some required target tag template parameters",
+            }
+            return response
+        if 'source_template_id' not in config or 'source_template_project' not in config or 'source_template_region' not in config:
+            response = {
+                "status": "error",
+                "message": "Request JSON is missing some required source tag template parameters",
+            }
+            return response
+
+        dcu = dc.DataCatalogUtils(config['target_template_id'], config['target_template_project'],
+                                  config['target_template_region'])
+    else:
+        if 'template_uuid' not in config:
+            response = {
+                "status": "error",
+                "message": "Request JSON is missing some required template_uuid parameter",
+            }
+            return response
+
+        template_config = teu.read_tag_template_config(config['template_uuid'])
+        dcu = dc.DataCatalogUtils(template_config['template_id'], template_config['template_project'],
+                                  template_config['template_region'])
+
+    creation_status = {"STATUS": "KO"}
+    if config_type == 'DYNAMIC_TABLE_TAG':
+        creation_status = dcu.apply_dynamic_table_config(config['fields'], uri, config['config_uuid'], \
+                                                         config['template_uuid'], config['tag_history'], \
+                                                         config['tag_stream'])
+    if config_type == 'DYNAMIC_COLUMN_TAG':
+        creation_status = dcu.apply_dynamic_column_config(config['fields'], config['included_columns_query'], uri,
+                                                          config['config_uuid'], \
+                                                          config['template_uuid'], config['tag_history'], \
+                                                          config['tag_stream'])
+    if config_type == 'STATIC_ASSET_TAG':
+        creation_status = dcu.apply_static_asset_config(config['fields'], uri, config['config_uuid'], \
+                                                        config['template_uuid'], config['tag_history'], \
+                                                        config['tag_stream'], config['overwrite'])
+    if config_type == 'ENTRY':
+        creation_status = dcu.apply_entry_config(config['fields'], uri, config['config_uuid'], \
+                                                 config['template_uuid'], config['tag_history'], \
+                                                 config['tag_stream'])
+    if config_type == 'GLOSSARY_ASSET_TAG':
+        creation_status = dcu.apply_glossary_asset_config(config['fields'], config['mapping_table'], uri,
+                                                          config['config_uuid'], \
+                                                          config['template_uuid'], config['tag_history'], \
+                                                          config['tag_stream'], config['overwrite'])
+    if config_type == 'SENSITIVE_COLUMN_TAG':
+        creation_status = dcu.apply_sensitive_column_config(config['fields'], config['dlp_dataset'],
+                                                            config['infotype_selection_table'], \
+                                                            config['infotype_classification_table'], uri,
+                                                            config['create_policy_tags'], \
+                                                            config['taxonomy_id'], config['config_uuid'], \
+                                                            config['template_uuid'], config['tag_history'], \
+                                                            config['tag_stream'], config['overwrite'])
+    if config_type == 'EXPORT_TAG':
+        creation_status = dcu.apply_export_config(config['config_uuid'], config['target_project'],
+                                                  config['target_dataset'], config['target_region'], uri)
+
+    if config_type == 'IMPORT_TAG':
+        creation_status = dcu.apply_import_config(config['config_uuid'], tag_extract, \
+                                                  config['tag_history'], config['tag_stream'], config['overwrite'])
+    if config_type == 'RESTORE_TAG':
+        creation_status = dcu.apply_restore_config(config['config_uuid'], tag_extract, \
+                                                   config['tag_history'], config['tag_stream'], config['overwrite'])
+
+    return creation_status
+
 
 @app.route("/_run_task", methods=['POST'])
 def _run_task():
