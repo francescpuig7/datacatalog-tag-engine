@@ -1894,15 +1894,17 @@ def static_asset_tags():
         }
         return jsonify(response), 400
      
-    #print('template_id: ' + template_id)
-    #print('template_project: ' + template_project)
-    #print('template_region: ' + template_region)
-    
+    print('template_id: ' + template_id)
+    print('template_project: ' + template_project)
+    print('template_region: ' + template_region)
+
     template_uuid = teu.write_tag_template(template_id, template_project, template_region)
+    print('Write tag template uuid {}'.format(template_uuid))
     
     dcu = dc.DataCatalogUtils(template_id, template_project, template_region)
     included_fields = json['fields']
     fields = dcu.get_template(included_fields=included_fields)
+    print('Getted template fields {}'.format(fields))
 
     if 'included_assets_uris' in json:
         included_assets_uris = json['included_assets_uris']
@@ -1925,7 +1927,8 @@ def static_asset_tags():
         tag_stream = json['tag_stream']
     else:
         tag_stream = None
-    
+
+    print('Getting refresh paramenters')
     refresh_mode, refresh_frequency, refresh_unit = get_refresh_parameters(json)
     
     # since we are creating a new config, we are overwriting any previously created tags
@@ -1934,13 +1937,10 @@ def static_asset_tags():
     config_uuid, included_assets_uris_hash = teu.write_static_asset_config('PENDING', fields, included_assets_uris, excluded_assets_uris, template_uuid,\
                                                             refresh_mode, refresh_frequency, refresh_unit, \
                                                             tag_history, tag_stream, overwrite)
-     
-    if isinstance(config_uuid, str): 
-        job_uuid = jm.create_job(config_uuid, 'STATIC_ASSET_TAG')
-    else:
-        job_uuid = None
 
-    return jsonify(job_uuid=job_uuid)
+    resp = run_sync_task(config_uuid, 'STATIC_ASSET_TAG', json)
+
+    return jsonify(param=resp)
     
 
 """
@@ -2833,12 +2833,10 @@ def _split_work():
     return resp
 
 
-def run_sync_task(config_type, config, data):
+def run_sync_task(config_uuid, config_type, data):
     print('*** enter run_sync_task ***')
 
     json = data
-    config_uuid = json['config_uuid']
-    config_type = json['config_type']
 
     if 'uri' in json:
         uri = json['uri']

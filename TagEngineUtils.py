@@ -289,17 +289,17 @@ class TagEngineUtils:
             #print(str(config))
             
         return template_config
-    
-    
+
+
     def read_tag_template(self, template_id, template_project, template_region):
-        
+
         template_exists = False
         template_uuid = ""
         
         # check to see if this template already exists
         template_ref = self.db.collection('tag_templates')
         query = template_ref.where('template_id', '==', template_id).where('template_project', '==', template_project).where('template_region', '==', template_region)
-        
+
         matches = query.get()
         
         # should either be a single matching template or no matching templates
@@ -334,9 +334,70 @@ class TagEngineUtils:
             })
                                    
         return template_uuid
-        
-        
-    def write_static_asset_config(self, config_status, fields, included_assets_uris, excluded_assets_uris, template_uuid, \
+
+    def write_static_asset_config(self, config_status, fields, included_assets_uris, excluded_assets_uris,
+                                  template_uuid, \
+                                  refresh_mode, refresh_frequency, refresh_unit, tag_history, tag_stream,
+                                  overwrite=False):
+        """Wrapped"""
+
+        # hash the included_assets_uris string
+        included_assets_uris_hash = hashlib.md5(included_assets_uris.encode()).hexdigest()
+
+        config_uuid = uuid.uuid1().hex
+
+        if refresh_mode == 'AUTO':
+
+            delta, next_run = self.validate_auto_refresh(refresh_frequency, refresh_unit)
+
+            config = self.db.collection('static_asset_configs')
+            doc_ref = config.document(config_uuid)
+            doc_ref.set({
+                'config_uuid': config_uuid,
+                'config_type': 'STATIC_ASSET_TAG',
+                'config_status': config_status,
+                'creation_time': datetime.utcnow(),
+                'fields': fields,
+                'included_assets_uris': included_assets_uris,
+                'included_assets_uris_hash': included_assets_uris_hash,
+                'excluded_assets_uris': excluded_assets_uris,
+                'template_uuid': template_uuid,
+                'refresh_mode': refresh_mode,  # AUTO refresh mode
+                'refresh_frequency': delta,
+                'refresh_unit': refresh_unit,
+                'tag_history': tag_history,
+                'tag_stream': tag_stream,
+                'scheduling_status': 'PENDING',
+                'next_run': next_run,
+                'version': 1,
+                'overwrite': overwrite
+            })
+
+        else:
+
+            config = self.db.collection('static_asset_configs')
+            doc_ref = config.document(config_uuid)
+            doc_ref.set({
+                'config_uuid': config_uuid,
+                'config_type': 'STATIC_ASSET_TAG',
+                'config_status': config_status,
+                'creation_time': datetime.utcnow(),
+                'fields': fields,
+                'included_assets_uris': included_assets_uris,
+                'included_assets_uris_hash': included_assets_uris_hash,
+                'excluded_assets_uris': excluded_assets_uris,
+                'template_uuid': template_uuid,
+                'refresh_mode': refresh_mode,  # ON_DEMAND refresh mode
+                'refresh_frequency': 0,  # N/A
+                'tag_history': tag_history,
+                'tag_stream': tag_stream,
+                'version': 1,
+                'overwrite': overwrite
+            })
+
+        return config_uuid, included_assets_uris_hash
+
+    def write_static_asset_config_(self, config_status, fields, included_assets_uris, excluded_assets_uris, template_uuid, \
                                   refresh_mode, refresh_frequency, refresh_unit, tag_history, tag_stream, overwrite=False):
         
         # hash the included_assets_uris string
