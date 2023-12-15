@@ -17,11 +17,14 @@ class FakeCollection:
 
 class FakeDocument:
     def __init__(self, document_path):
+        print('Document')
         self.document_path = document_path
         self.configs = dict()
 
     def get(self):
+        print(self.configs)
         return self.configs[self.document_path]
 
     def set(self, confs):
+        print(self.configs)
         self.configs[self.document_path] = confs

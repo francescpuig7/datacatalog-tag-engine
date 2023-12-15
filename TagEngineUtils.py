@@ -323,7 +323,7 @@ class TagEngineUtils:
             'template_region': template_region
         })
 
-        return template_uuid
+        return template_uuid, doc_ref
 
     def write_tag_template_(self, template_id, template_project, template_region):
         
@@ -404,7 +404,7 @@ class TagEngineUtils:
                 'overwrite': overwrite
             })
 
-        return config_uuid, included_assets_uris_hash
+        return config_uuid, included_assets_uris_hash, doc_ref
 
     def write_static_asset_config_(self, config_status, fields, included_assets_uris, excluded_assets_uris, template_uuid, \
                                   refresh_mode, refresh_frequency, refresh_unit, tag_history, tag_stream, overwrite=False):

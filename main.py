@@ -1898,7 +1898,7 @@ def static_asset_tags():
     print('template_project: ' + template_project)
     print('template_region: ' + template_region)
 
-    template_uuid = teu.write_tag_template(template_id, template_project, template_region)
+    template_uuid, confs = teu.write_tag_template(template_id, template_project, template_region)
     print('Write tag template uuid {}'.format(template_uuid))
     
     dcu = dc.DataCatalogUtils(template_id, template_project, template_region)
@@ -1933,12 +1933,11 @@ def static_asset_tags():
     
     # since we are creating a new config, we are overwriting any previously created tags
     overwrite = True
-    
-    config_uuid, included_assets_uris_hash = teu.write_static_asset_config('PENDING', fields, included_assets_uris, excluded_assets_uris, template_uuid,\
+    config_uuid, included_assets_uris_hash, data = teu.write_static_asset_config('PENDING', fields, included_assets_uris, excluded_assets_uris, template_uuid,\
                                                             refresh_mode, refresh_frequency, refresh_unit, \
                                                             tag_history, tag_stream, overwrite)
 
-    resp = run_sync_task(config_uuid, 'STATIC_ASSET_TAG', json)
+    resp = run_sync_task(config_uuid, 'STATIC_ASSET_TAG', json, confs, data)
 
     return jsonify(param=resp)
     
@@ -2833,10 +2832,10 @@ def _split_work():
     return resp
 
 
-def run_sync_task(config_uuid, config_type, data):
+def run_sync_task(config_uuid, config_type, json_data, template_conf, confs):
     print('*** enter run_sync_task ***')
 
-    json = data
+    json = json_data
 
     if 'uri' in json:
         uri = json['uri']
@@ -2851,7 +2850,8 @@ def run_sync_task(config_uuid, config_type, data):
         tag_extract = None
 
     # retrieve the config
-    config = teu.read_config(config_uuid, config_type)
+    config = confs.get()
+    #config = teu.read_config(config_uuid, config_type)
     print('config: ', config)
 
     if config_type == 'EXPORT_TAG':
@@ -2892,11 +2892,10 @@ def run_sync_task(config_uuid, config_type, data):
                 "message": "Request JSON is missing some required template_uuid parameter",
             }
             return response
-
-        template_config = teu.read_tag_template_config(config['template_uuid'])
+        template_config = template_conf.get()
+        #template_config = teu.read_tag_template_config(config['template_uuid'])
         dcu = dc.DataCatalogUtils(template_config['template_id'], template_config['template_project'],
                                   template_config['template_region'])
-
     creation_status = {"STATUS": "KO"}
     if config_type == 'DYNAMIC_TABLE_TAG':
         creation_status = dcu.apply_dynamic_table_config(config['fields'], uri, config['config_uuid'], \
