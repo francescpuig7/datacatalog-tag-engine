@@ -18,8 +18,10 @@ from datetime import datetime
 from datetime import timedelta
 from google.api_core.gapic_v1.client_info import ClientInfo
 from google.cloud import bigquery
-from google.cloud import firestore
+import psycopg2
 from google.cloud.firestore_v1.base_query import FieldFilter
+from psycopg2 import extras
+
 import DataCatalogController as controller
 import ConfigType as ct
 import constants
@@ -29,42 +31,50 @@ USER_AGENT = 'cloud-solutions/datacatalog-tag-engine-v2'
 class TagEngineStoreHandler:
     
     def __init__(self):
-        
-        
+        """ Wrapped Get db connection, reading from .ini config
+        """
         config = configparser.ConfigParser()
         config.read("tagengine.ini")
-        self.db_name = config['DEFAULT'].get('DB_NAME', None)
-        if self.db_name is not None:
-            self.db = firestore.Client(database=self.db_name.strip(), client_info=ClientInfo(user_agent=USER_AGENT))
-        else:
-            self.db = firestore.Client(client_info=ClientInfo(user_agent=USER_AGENT))
-        
+        env_key = 'DEFAULT'
+        db_params = {
+            'host': config[env_key].get('DB_HOST', None), 'database': config[env_key].get('DB_NAME', None),
+            'user': config[env_key].get('DB_USER', None), 'password': config[env_key].get('PASSWORD', None),
+            'port': config[env_key].get('DB_PORT', None), 'connect_timeout': 10, 'application_name': 'tag_engine'
+        }
+        self.db = self.db_conn(**db_params)
+
+    @staticmethod
+    def db_conn(**kwargs):
+        # todo: map kwargs
+        return psycopg2.connect(host=kwargs["host"], database=kwargs["database"], user=kwargs["user"],
+                                password=kwargs["password"], port=kwargs["port"], connect_timeout=5)
+
     def read_default_settings(self, user_email):
+        """ Wrapped read_default_settings from tab settings by user_email
+        """
         
         settings = {}
         exists = False
-        
-        doc_ref = self.db.collection('settings').document(user_email)
-        doc = doc_ref.get()
-        
-        if doc.exists:
-            settings = doc.to_dict()
-            exists = True 
-        
+
+        with self.db.cursor(cursor_factory=extras.DictCursor) as cur:
+            cur.execute(f"SELECT * from settings where user_email LIKE = {user_email}")
+            doc_ref = cur.fetchone()
+            if doc_ref is not None:
+                settings = 'a'
+                exists = True
+
         return exists, settings
-        
-    
+
     def write_default_settings(self, user_email, template_id, template_project, template_region, service_account):
-        
-        settings = self.db.collection('settings')
-        doc_ref = settings.document(user_email)
-        doc_ref.set({
-            'template_id': template_id,
-            'template_project':  template_project,
-            'template_region': template_region,
-            'service_account': service_account
-        })
-        
+        """ Wrapped write default settings"""
+        with self.db.cursor(cursor_factory=extras.DictCursor) as cur:
+            # todo: on conflict update
+            cur.execute(
+                f"""INSERT INTO settings (user_email, template_id, template_project, template_region, service_account) 
+                VALUES ({user_email}, {template_id}, {template_project}, {template_region}, {service_account}) 
+                ON CONFLICT (user_email) DO NOTHING"""
+            )
+            cur.commit()
         print('Saved default settings.')
     
 
