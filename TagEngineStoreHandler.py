@@ -18,20 +18,17 @@ from datetime import datetime
 from datetime import timedelta
 from google.cloud import bigquery
 import psycopg2
-from google.cloud.firestore_v1.base_query import FieldFilter # TODO: cancel import
 from psycopg2 import extras
 
 import DataCatalogController as controller
 import ConfigType as ct
 from db.query_builder import dict_to_query
 
-USER_AGENT = 'cloud-solutions/datacatalog-tag-engine-v2'
-
 
 class TagEngineStoreHandler:
 
     def __init__(self):
-        """ Wrapped Get db connection, reading from .ini config
+        """ Initialize db connection, reading from .ini config
         """
         # read connection parameters
         db_params = self.config()
@@ -59,8 +56,8 @@ class TagEngineStoreHandler:
         return db
 
     def read_default_settings(self, user_email):
-        """ Wrapped read_default_settings from tab settings by user_email
-        Get default settings info
+        """ Read default settings from db
+        @return: bool, dict
         """
         settings = {}
         exists = False
@@ -75,8 +72,7 @@ class TagEngineStoreHandler:
         return exists, settings
 
     def write_default_settings(self, user_email, template_id, template_project, template_region, service_account):
-        """ Wrapped write default settings
-        Write default settings, if user_email exists, update values
+        """ Write default settings, if user_email exists, update values
         """
         with self.db.cursor() as cur:
             cur.execute(
@@ -90,8 +86,8 @@ class TagEngineStoreHandler:
         print('Saved default settings.')
 
     def read_tag_history_settings(self):
-        """ Wrapped read tag history settings
-        Get info from settings table
+        """ Read settings from db where setting_type is tag_history
+        @return: bool, dict
         """
         settings = {}
         enabled = False
@@ -108,13 +104,15 @@ class TagEngineStoreHandler:
         return enabled, settings
 
     def write_tag_history_settings(self, enabled, bigquery_project, bigquery_region, bigquery_dataset):
-        """ Wrapped write tag history settings
-        Write tag history settings on settings table
+        """ Write tag_history settings on db
+        @return: bool with write_status result
         """
         write_status = True
 
         with self.db.cursor() as cur:
             try:
+                # Preventive delete
+                cur.execute("DELETE FROM settings WHERE setting_type = 'tag_history'")
                 cur.execute(
                     f"""INSERT INTO settings 
                     (setting_type, enabled, bigquery_project, bigquery_region, bigquery_dataset) 
@@ -129,7 +127,8 @@ class TagEngineStoreHandler:
             return write_status
 
     def read_job_metadata_settings(self):
-        """ Wrapped write read job metadata settings
+        """ Read settings from db where setting_type is job_metadata
+        @return: bool, dict
         """
         settings = {}
         exists = False
@@ -137,15 +136,16 @@ class TagEngineStoreHandler:
         with self.db.cursor(cursor_factory=extras.DictCursor) as cur:
             cur.execute(f"SELECT * from settings where setting_type = 'job_metadata'")
             doc_ref = cur.fetchall()
-            if doc_ref:
-                for row in doc_ref:
-                    settings = dict(row)
-                    exists = True
+            for row in doc_ref:
+                settings = dict(row)
+                exists = True
 
         return exists, settings
 
     def write_job_metadata_settings(self, enabled, bigquery_project, bigquery_region, bigquery_dataset):
-        """ Wrapped """
+        """ Write into settings table on db
+        @return: bool with write_status result
+        """
         write_status = True
 
         with self.db.cursor() as cur:
@@ -164,7 +164,9 @@ class TagEngineStoreHandler:
             return write_status
 
     def read_coverage_report_settings(self):
-        """ Wrapped """
+        """ Read coverage_report_settings from db
+        @return: bool, dict
+        """
         settings = {}
         exists = False
 
@@ -178,18 +180,21 @@ class TagEngineStoreHandler:
         return exists, settings
 
     def write_coverage_report_settings(self, included_bigquery_projects, excluded_bigquery_datasets, excluded_bigquery_tables):
-        """ Wrapped
-        Save coverage report settings
+        """ write coverage report settings on db. make a preventive delete first
         """
-        #TODO: only one row for coverage report settings
         with self.db.cursor() as cur:
+            # Preventive delete
+            cur.execute("DELETE FROM coverage_report_settings")
             cur.execute(f"""INSERT INTO coverage_report_settings (included_bigquery_projects, excluded_bigquery_datasets, 
             excluded_bigquery_tables) VALUES ('{included_bigquery_projects}', '{excluded_bigquery_datasets}', 
             '{excluded_bigquery_tables}')""")
         print('Saved coverage report settings.')
 
     def generate_coverage_report(self, credentials):
-        """ Wrapped """
+        """ Generate a coverage report
+        @param credentials: creds to interact with datacatalog_v1 library
+        @return: list summary_report, list detailed_report
+        """
         summary_report = []
         detailed_report = []
         
@@ -263,7 +268,9 @@ class TagEngineStoreHandler:
         return summary_report, detailed_report
 
     def check_active_config(self, config_uuid, config_type):
-        """ Wrapped """
+        """ Check if config_type with uuid exists
+        @return: bool
+        """
         coll_name = self.lookup_config_collection(config_type)
         with self.db.cursor() as cur:
             cur.execute(f"""SELECT 1 from {coll_name} where config_uuid = '{config_uuid}'""")
@@ -279,7 +286,7 @@ class TagEngineStoreHandler:
         if coll_name is None:
             return False
         with self.db.cursor() as cur:
-            cur.execute(f"UPDATE {coll_name} SET job_status = '{status}' WHERE config_uuid = '{config_uuid}")
+            cur.execute(f"UPDATE {coll_name} SET job_status = '{status}' WHERE config_uuid = '{config_uuid}'")
             self.db.commit()
     
     def update_scheduling_status(self, config_uuid, config_type, status):
@@ -293,7 +300,8 @@ class TagEngineStoreHandler:
                 print(f'Conf table {coll_name} has no present scheduling_status field')
 
     def increment_version_next_run(self, service_account, config_uuid, config_type):
-        """ Wrapped """
+        """ Increment +1 in version and set next_run for this config
+        """
         config = self.read_config(service_account, config_uuid, config_type)
         
         version = config.get('version', 0) + 1
@@ -310,7 +318,8 @@ class TagEngineStoreHandler:
         coll_name = self.lookup_config_collection(config_type)
 
         with self.db.cursor() as cur:
-            cur.execute(f"UPDATE {coll_name} SET version = {version}, next_run = {next_run} WHERE config_uuid = '{config_uuid}")
+            cur.execute(f"""UPDATE {coll_name} SET version = {version}, next_run = '{next_run}' 
+            WHERE config_uuid = '{config_uuid}'""")
             self.db.commit()
                                                                                   
     def read_tag_template_config(self, template_uuid):
@@ -329,7 +338,7 @@ class TagEngineStoreHandler:
         template_uuid = ""
 
         with self.db.cursor(cursor_factory=extras.DictCursor) as cur:
-            cur.execute(f"""SELECT * FROM tag_templates WHERE template_id = '{template_id}' 
+            cur.execute(f"""SELECT template_uuid FROM tag_templates WHERE template_id = '{template_id}' 
             AND template_project = '{template_project}'
             AND template_region = '{template_region}'""")
             matches = cur.fetchall()
@@ -343,22 +352,17 @@ class TagEngineStoreHandler:
         return template_exists, template_uuid
 
     def write_tag_template(self, template_id, template_project, template_region):
-        
+        """ Wrapped """
         template_exists, template_uuid = self.read_tag_template(template_id, template_project, template_region)
         
-        if template_exists == False:    
+        if not template_exists:
             print('tag template {} doesn\'t exist. Creating new template'.format(template_id))
              
             template_uuid = uuid.uuid1().hex
-                     
-            doc_ref = self.db.collection('tag_templates').document(template_uuid)
-            doc_ref.set({
-                'template_uuid': template_uuid, 
-                'template_id': template_id,
-                'template_project': template_project,
-                'template_region': template_region
-            })
-                                   
+            with self.db.cursor(cursor_factory=extras.DictCursor) as cur:
+                cur.execute(f"""INSERT into tag_templates (template_uuid,template_id,template_project,template_region) 
+                VALUES ('{template_uuid}','{template_id}','{template_project}','{template_region}')""")
+
         return template_uuid
 
     def write_static_asset_config(self, service_account, fields, included_assets_uris, excluded_assets_uris, template_uuid, \
@@ -459,7 +463,7 @@ class TagEngineStoreHandler:
         included_tables_uris_hash = hashlib.md5(included_tables_uris.encode()).hexdigest()
 
         with self.db.cursor(cursor_factory=extras.DictCursor) as cur:
-            cur.execute(f"""SELECT * FROM dynamic_table_configs WHERE template_uuid = '{template_uuid}' 
+            cur.execute(f"""SELECT config_uuid FROM dynamic_table_configs WHERE template_uuid = '{template_uuid}' 
             AND included_tables_uris_hash = '{included_tables_uris_hash}'
             AND config_type = 'DYNAMIC_TAG_TABLE'
             AND config_status != 'INACTIVE'""")
@@ -540,7 +544,7 @@ class TagEngineStoreHandler:
         included_tables_uris_hash = hashlib.md5(included_tables_uris.encode()).hexdigest()
 
         with self.db.cursor(cursor_factory=extras.DictCursor) as cur:
-            cur.execute(f"""SELECT * FROM dynamic_column_configs WHERE template_uuid = '{template_uuid}' 
+            cur.execute(f"""SELECT config_uuid FROM dynamic_column_configs WHERE template_uuid = '{template_uuid}' 
             AND included_tables_uris_hash = '{included_tables_uris_hash}'
             AND config_type = 'DYNAMIC_TAG_COLUMN'
             AND config_status != 'INACTIVE'""")
@@ -650,7 +654,7 @@ class TagEngineStoreHandler:
         included_assets_uris_hash = hashlib.md5(included_assets_uris.encode()).hexdigest()
 
         with self.db.cursor(cursor_factory=extras.DictCursor) as cur:
-            cur.execute(f"""SELECT * FROM entry_configs WHERE template_uuid = '{template_uuid}' 
+            cur.execute(f"""SELECT config_uuid FROM entry_configs WHERE template_uuid = '{template_uuid}' 
             AND included_assets_uris_hash = '{included_assets_uris_hash}'
             AND config_type = 'ENTRY_CREATE'
             AND config_status != 'INACTIVE'""")
@@ -733,7 +737,7 @@ class TagEngineStoreHandler:
         included_assets_uris_hash = hashlib.md5(included_assets_uris.encode()).hexdigest()
 
         with self.db.cursor(cursor_factory=extras.DictCursor) as cur:
-            cur.execute(f"""SELECT * FROM glossary_asset_configs WHERE template_uuid = '{template_uuid}' 
+            cur.execute(f"""SELECT config_uuid FROM glossary_asset_configs WHERE template_uuid = '{template_uuid}' 
             AND included_assets_uris_hash = '{included_assets_uris_hash}'
             AND config_type = 'GLOSSARY_TAG_ASSET'
             AND config_status != 'INACTIVE'""")
@@ -750,7 +754,7 @@ class TagEngineStoreHandler:
                 print('Updated status to INACTIVE.')
        
             config_uuid = uuid.uuid1().hex
-        
+            #TODO: template_id, template_project, template_region
             if refresh_mode == 'AUTO':
 
                 delta, next_run = self.validate_auto_refresh(refresh_frequency, refresh_unit)
@@ -822,7 +826,7 @@ class TagEngineStoreHandler:
         included_tables_uris_hash = hashlib.md5(included_tables_uris.encode()).hexdigest()
 
         with self.db.cursor(cursor_factory=extras.DictCursor) as cur:
-            cur.execute(f"""SELECT * FROM sensitive_column_configs WHERE template_uuid = '{template_uuid}' 
+            cur.execute(f"""SELECT config_uuid FROM sensitive_column_configs WHERE template_uuid = '{template_uuid}' 
             AND included_tables_uris_hash = '{included_tables_uris_hash}'
             AND config_type = 'SENSITIVE_TAG_COLUMN'
             AND config_status != 'INACTIVE'""")
@@ -915,7 +919,7 @@ class TagEngineStoreHandler:
         print('** write_tag_restore_config **')
 
         with self.db.cursor(cursor_factory=extras.DictCursor) as cur:
-            cur.execute(f"""SELECT * FROM restore_configs WHERE source_template_uuid = '{source_template_uuid}' 
+            cur.execute(f"""SELECT config_uuid FROM restore_configs WHERE source_template_uuid = '{source_template_uuid}' 
             AND target_template_uuid = '{target_template_uuid}' AND config_status != 'INACTIVE'""")
             matches = cur.fetchall()
 
@@ -962,7 +966,7 @@ class TagEngineStoreHandler:
         print('** write_tag_import_csv_config **')
 
         with self.db.cursor(cursor_factory=extras.DictCursor) as cur:
-            cur.execute(f"""SELECT * FROM import_configs WHERE template_uuid = '{template_uuid}' 
+            cur.execute(f"""SELECT config_uuid FROM import_configs WHERE template_uuid = '{template_uuid}' 
             AND metadata_import_location = '{metadata_import_location}' AND config_status != 'INACTIVE'""")
             matches = cur.fetchall()
 
@@ -1007,14 +1011,14 @@ class TagEngineStoreHandler:
         print('** write_tag_export_config **')
 
         if source_projects != '':
-            query_str = f"""SELECT * FROM export_configs WHERE 
+            query_str = f"""SELECT config_uuid FROM export_configs WHERE 
             source_projects = '{source_projects}' 
             AND source_region = '{source_region}'
             AND target_project = '{target_project}'
             AND target_dataset = '{target_dataset}'
             AND config_status != 'INACTIVE'"""
         else:
-            query_str = f"""SELECT * FROM export_configs WHERE 
+            query_str = f"""SELECT config_uuid FROM export_configs WHERE 
             source_folder = '{source_folder}' 
             AND source_region = '{source_region}'
             AND target_project = '{target_project}'
@@ -1144,7 +1148,6 @@ class TagEngineStoreHandler:
                     if template_exists:
                         query_str += f"template_uuid = '{template_uuid}'"
                 query_str += f" AND config_status != INACTIVE AND service_account = '{service_account}'"
-                #docs = docs.where(filter=FieldFilter('', '==', )).stream() TODO: stream?
 
                 cur.execute(query_str)
                 docs = cur.fetchall()
@@ -1185,9 +1188,9 @@ class TagEngineStoreHandler:
         with self.db.cursor(cursor_factory=extras.DictCursor) as cur:
             cur.execute(f"SELECT * from jobs WHERE config_uuid = '{config_uuid}' ORDER BY completion_time DESC")
             jobs_stream = cur.fetchall()
-            #jobs_stream = query.order_by('', direction=firestore.Query.DESCENDING).stream() TODO: STREAM
+
             for job in jobs_stream:
-                job_results.append(job.to_dict())
+                job_results.append(dict(job))
         
         return job_results
 
@@ -1235,6 +1238,7 @@ class TagEngineStoreHandler:
                     return False
             try:
                 cur.execute(f"DELETE from {coll_name} WHERE config_uuid = '{config_uuid}'")
+                self.db.commit()
             except Exception as e:
                 print('Error occurred during delete_config: ', e)
                 return False
@@ -1261,137 +1265,145 @@ class TagEngineStoreHandler:
         return running_count
 
     def read_export_configs(self):
+        """ Wrapped """
         
         configs = []
-    
-        query = self.db.collection('export_configs').where(filter=FieldFilter('config_status', '!=', 'INACTIVE'))
-        docs = query.order_by('config_status', direction=firestore.Query.DESCENDING).stream()
-                
-        for doc in docs:
-            config = doc.to_dict()
-            config = self.format_source_projects(config)      
-            configs.append(config)  
+        with self.db.cursor(cursor_factory=extras.DictCursor) as cur:
+            cur.execute("SELECT * from export_configs WHERE config_status != 'INACTIVE' ORDER BY config_status DESC")
+            docs = cur.fetchall()
+
+            for doc in docs:
+                config = dict(doc)
+                config = self.format_source_projects(config)
+                configs.append(config)
 
         return configs
-      
-      
-    def format_source_projects(self, config):
-        
+
+    @staticmethod
+    def format_source_projects(config):
+        """ Wrapped """
         if config['source_projects'] != '':
-            
+
             source_projects = config['source_projects']
             source_projects_str = ''
             for project in source_projects:
                 source_projects_str += project + ','
-            
+
             config['source_projects'] = source_projects_str[0:-1]
-        
+
         return config
-        
-      
+
     def read_ready_configs(self):
-        
+        """ Get ready active confs
+        @return: list from active confs
+        """
         ready_configs = []
 
         for coll_name in self.get_config_collections():
-            config_ref = self.db.collection(coll_name)
-            config_ref = config_ref.where("refresh_mode", "==", "AUTO")
-            config_ref = config_ref.where("scheduling_status", "==", "READY")
-            config_ref = config_ref.where("config_status", "==", "ACTIVE")
-            config_ref = config_ref.where("next_run", "<=", datetime.utcnow())
-        
-            config_stream = list(config_ref.stream())
-        
-            for ready_config in config_stream:
-            
-                config_dict = ready_config.to_dict()
-                ready_configs.append((config_dict['config_uuid'], config_dict['config_type']))
-            
-        return ready_configs  
-        
-        
+            cur = self.db.cursor(cursor_factory=extras.DictCursor)
+            try:
+                cur.execute(f"""SELECT * from {coll_name} WHERE refresh_mode = 'AUTO' AND scheduling_status = 'READY' 
+                AND config_status = 'ACTIVE' AND next_run <= '{datetime.utcnow()}'""")
+                config_stream = cur.fetchall()
+
+                for ready_config in config_stream:
+                    config_dict = dict(ready_config)
+                    ready_configs.append((config_dict['config_uuid'], config_dict['config_type']))
+            except Exception:
+                print(f'No active confs for {coll_name}')
+            finally:
+                cur.close()
+        return ready_configs
+
     def lookup_config_by_uris(self, template_id, template_project, template_region, config_type, included_uris):
-        
+        """ Wrapped """
         success = False
         config = None
         config_uuid = ''
         
         template_exists, template_uuid = self.read_tag_template(template_id, template_project, template_region)
         
-        if template_exists != True:
+        if not template_exists:
             print('Error: tag template', template_id, 'does not exist in', template_project, 'and', template_region)
             return success, config_uuid
         
         coll_name = self.lookup_config_collection(config_type)
-           
-        config_ref = self.db.collection(coll_name)
         
         if 'asset' in coll_name:
-            config = config_ref.where(filter=FieldFilter('template_uuid', '==', template_uuid))
-            config = config.where(filter=FieldFilter('config_status', '==', 'ACTIVE'))
-            config = config.where(filter=FieldFilter('included_assets_uris', '==', included_uris)).get()
+            query_str = f"""SELECT config_uuid FROM '{coll_name}' WHERE 
+            template_uuid = '{template_uuid}' 
+            AND config_status = 'ACTIVE' 
+            AND included_assets_uris = '{included_uris}'"""
         else:
-            config = config_ref.where(filter=FieldFilter('template_uuid', '==', template_uuid))
-            config = config.where(filter=FieldFilter('config_status', '==', 'ACTIVE'))
-            config = config.where(filter=FieldFilter('included_tables_uris', '==', included_uris)).get()
-        
-        if config == None:
-            print('Error: config could not be found')
-            return success, config_uuid
-        else:
-            if len(config) == 1:
-                config_uuid = config[0].id
-                success = True
-                 
+            query_str = f"""SELECT config_uuid FROM '{coll_name}' WHERE 
+            template_uuid = '{template_uuid}' 
+            AND config_status = 'ACTIVE' 
+            AND included_tables_uris = '{included_uris}'"""
+
+        with self.db.cursor(cursor_factory=extras.DictCursor) as cur:
+            cur.execute(query_str)
+            config = cur.fetchall()
+
+            if not config:
+                print('Error: config could not be found')
+                return success, config_uuid
+            else:
+                if len(config) == 1:
+                    config_uuid = dict(config[0]['config_uuid'])
+                    success = True
+
         return success, config_uuid
 
-
     def lookup_tag_template(self, config_type, config_uuid):
-        
+        """ Wrapped """
         template_id = None
 
         coll_name = self.lookup_config_collection(config_type)
-        doc = self.db.collection(coll_name).document(config_uuid).get()
-        
-        if doc.exists:
-            config = doc.to_dict()
-            template_id = config['template_id']
-        else:
-            print('Error: could not locate the config')
-                  
+        with self.db.cursor(cursor_factory=extras.DictCursor) as cur:
+            cur.execute(f"SELECT * from {coll_name} WHERE config_uuid = '{config_uuid}'")
+            docs = cur.fetchall()
+
+            if docs:
+                for doc in docs:
+                    config = dict(doc)
+                    template_id = config['template_id']
+            else:
+                print('Error: could not locate the config')
+
         return template_id
 
-
     def lookup_service_account(self, config_type, config_uuid):
-        
+        """ Wrapped """
         service_account = None
 
         coll_name = self.lookup_config_collection(config_type)
-        doc = self.db.collection(coll_name).document(config_uuid).get()
-        
-        if doc.exists:
-            config = doc.to_dict()
-            service_account = config['service_account']
-        else:
-            print('Error: could not locate the config, returning an empty service account')
-                  
+        with self.db.cursor(cursor_factory=extras.DictCursor) as cur:
+            cur.execute(f"SELECT * from {coll_name} WHERE config_uuid = '{config_uuid}'")
+            docs = cur.fetchall()
+
+            if docs:
+                for doc in docs:
+                    config = dict(doc)
+                    service_account = config['service_account']
+            else:
+                print('Error: could not locate the config, returning an empty service account')
+
         return service_account
-        
 
     def update_config(self, old_config_uuid, config_type, config_status, fields, included_uris, excluded_uris, template_uuid, \
                       template_id, template_project, template_region, refresh_mode, refresh_frequency, \
                       refresh_unit, tag_history, overwrite=False, mapping_table=None):
-        
-        #print('enter update_config')
-        #print('old_config_uuid: ', old_config_uuid)
-        #print('config_type: ', config_type)
+        """ Wrapped """
+        print('enter update_config')
+        print('old_config_uuid: ', old_config_uuid)
+        print('config_type: ', config_type)
         
         coll_name = self.lookup_config_collection(config_type)
         print('coll_name: ', coll_name)
-        
-        self.db.collection(coll_name).document(old_config_uuid).update({
-            'config_status' : "INACTIVE"
-        })
+
+        with self.db.cursor() as cur:
+            cur.execute(f"UPDATE {coll_name} SET config_status = 'INACTIVE' WHERE config_uuid = '{old_config_uuid}'")
+            self.db.commit()
         
         if config_type == 'STATIC_TAG_ASSET':
             new_config_uuid = self.write_static_asset_config(config_status, fields, included_uris, excluded_uris, template_uuid, \
@@ -1416,35 +1428,34 @@ class TagEngineStoreHandler:
         # note: no need to return the included_uris_hash
             
         return new_config_uuid
-    
 
     def update_dynamic_column_config(self, old_config_uuid, config_type, config_status, fields, included_columns_query, included_tables_uris,\
                                      excluded_tables_uris, template_uuid, template_id, template_project, template_region, \
                                      refresh_mode, refresh_frequency, refresh_unit, tag_history):
-        
-        self.db.collection('dynamic_column_configs').document(old_config_uuid).update({
-            'config_status' : "INACTIVE"
-        })
-        
-        
+        """ Wrapped """
+        with self.db.cursor() as cur:
+            cur.execute(f"""UPDATE dynamic_column_configs SET config_status = 'INACTIVE' 
+            WHERE config_uuid = '{old_config_uuid}'""")
+            self.db.commit()
+
         new_config_uuid, included_tables_uris_hash = self.write_dynamic_column_config(config_status, fields, included_columns_query, \
                                                               included_tables_uris, excluded_tables_uris, \
                                                               template_uuid, template_id, template_project, template_region, \
                                                               refresh_mode, refresh_frequency, refresh_unit, tag_history)
         
         return new_config_uuid
-        
 
     def update_sensitive_column_config(self, old_config_uuid, config_status, dlp_dataset, infotype_selection_table, \
                                        infotype_classification_table, included_tables_uris, excluded_tables_uris, \
                                        create_policy_tags, taxonomy_id, template_uuid, template_id, template_project, template_region, \
                                        refresh_mode, refresh_frequency, refresh_unit, tag_history, overwrite):
+        """ Wrapped """
+        with self.db.cursor() as cur:
+            cur.execute(f"""UPDATE sensitive_column_configs SET config_status = 'INACTIVE' 
+            WHERE config_uuid = '{old_config_uuid}'""")
+            self.db.commit()
         
-        self.db.collection('sensitive_column_configs').document(old_config_uuid).update({
-            'config_status' : "INACTIVE"
-        })
-        
-        config = self.read_config(old_config_uuid, 'SENSITIVE_TAG_COLUMN')
+        config = self.read_config(old_config_uuid, 'SENSITIVE_TAG_COLUMN') # TODO: number parameters read_config
         
         new_config_uuid, included_tables_uris_hash = self.write_sensitive_column_config(config_status, config['fields'], dlp_dataset, \
                                                                           infotype_selection_table, infotype_classification_table, \
@@ -1453,22 +1464,21 @@ class TagEngineStoreHandler:
                                                                           template_id, template_project, template_region, \
                                                                           refresh_mode, refresh_frequency, refresh_unit, \
                                                                           tag_history, overwrite)
-        
-        
+
         return new_config_uuid
-                     
 
     def update_tag_restore_config(self, old_config_uuid, config_status, source_template_uuid, source_template_id, source_template_project, 
                               source_template_region, target_template_uuid, target_template_id, target_template_project, \
                               target_template_region, metadata_export_location, tag_history, overwrite=False):
-        
-        self.db.collection('restore_configs').document(old_config_uuid).update({
-            'config_status' : "INACTIVE"
-        })
+        """ Wrapped """
+        with self.db.cursor() as cur:
+            cur.execute(f"""UPDATE restore_configs SET config_status = 'INACTIVE' 
+            WHERE config_uuid = '{old_config_uuid}'""")
+            self.db.commit()
         
         new_config_uuid = self.write_tag_restore_config(config_status, source_template_uuid, source_template_id, source_template_project, \
                                                         source_template_region, target_template_uuid, target_template_id, \
                                                         target_template_project, target_template_region, \
                                                         metadata_export_location, tag_history, overwrite)
-                    
+
         return new_config_uuid
