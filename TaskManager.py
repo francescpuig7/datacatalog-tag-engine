@@ -16,7 +16,6 @@ import uuid, hashlib, datetime, json, configparser, math
 import constants
 import psycopg2
 from google.cloud import tasks_v2
-
 from db.query_builder import dict_to_query
 
 
@@ -35,16 +34,35 @@ class TaskManager:
                 queue_region,
                 queue_name, 
                 task_handler_uri,
-                db_params=None):
+                db_name=None):
 
         self.cloud_run_sa = cloud_run_sa
         self.tag_engine_project = tag_engine_project
         self.queue_region = queue_region
         self.queue_name = queue_name
         self.task_handler_uri = task_handler_uri
+        db_params = self.config()
         self.db = psycopg2.connect(**db_params)
 
         self.tasks_per_shard = 1000
+
+    @staticmethod
+    def config(filename='tagengine.ini', section='POSTGRESQL'):
+        """ Get config data from file .ini
+        """
+        config = configparser.ConfigParser()
+        config.read(filename)
+
+        # get section, default to POSTGRESQL
+        db = {}
+        if config.has_section(section):
+            params = config.items(section)
+            for param in params:
+                db[param[0]] = param[1]
+        else:
+            raise Exception('Section {0} not found in the {1} file'.format(section, filename))
+
+        return db
 
 ##################### API METHODS #################
         

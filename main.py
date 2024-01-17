@@ -21,7 +21,6 @@ import requests
 import google_auth_oauthlib.flow
 from googleapiclient import discovery
 
-from google.cloud import firestore
 from google.cloud import bigquery
 from google.cloud import tasks_v2
 from google.protobuf import timestamp_pb2

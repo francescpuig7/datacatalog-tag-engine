@@ -19,6 +19,7 @@ from psycopg2 import extras
 from google.cloud import tasks_v2
 from db.query_builder import dict_to_query
 
+
 class JobManager:
     """Class for managing jobs for async task create and update requests
     
@@ -35,15 +36,33 @@ class JobManager:
                 queue_region,
                 queue_name, 
                 task_handler_uri,
-                db_params=None):
+                db_name=None):
 
         self.cloud_run_sa = cloud_run_sa
         self.tag_engine_project = tag_engine_project
         self.queue_region = queue_region
         self.queue_name = queue_name
         self.task_handler_uri = task_handler_uri
+        db_params = self.config()
         self.db = psycopg2.connect(**db_params)
 
+    @staticmethod
+    def config(filename='tagengine.ini', section='POSTGRESQL'):
+        """ Get config data from file .ini
+        """
+        config = configparser.ConfigParser()
+        config.read(filename)
+
+        # get section, default to POSTGRESQL
+        db = {}
+        if config.has_section(section):
+            params = config.items(section)
+            for param in params:
+                db[param[0]] = param[1]
+        else:
+            raise Exception('Section {0} not found in the {1} file'.format(section, filename))
+
+        return db
 
 ##################### API METHODS #################
 
@@ -270,14 +289,7 @@ if __name__ == '__main__':
     db_name = config['DEFAULT'].get('DB_NAME', None)
     task_handler_uri = '/_split_work'
 
-    # get section, default to POSTGRESQL
-    db_params = {}
-    if config.has_section('POSTGRESQL'):
-        params = config.items('POSTGRESQL')
-        for param in params:
-            db_params[param[0]] = param[1]
-
-    jm = JobManager(project, region, queue_name, task_handler_uri, db_params)
+    jm = JobManager(project, region, queue_name, task_handler_uri, db_name)
     
     config_uuid = '1f1b4720839c11eca541e1ad551502cb'
     jm.create_async_job(config_uuid)
