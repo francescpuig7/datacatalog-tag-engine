@@ -14,10 +14,10 @@
 
 import uuid, datetime, json, configparser
 import constants
-from google.cloud import firestore
-from google.cloud.firestore_v1.base_query import FieldFilter
+import psycopg2
+from psycopg2 import extras
 from google.cloud import tasks_v2
-
+from db.query_builder import dict_to_query
 
 class JobManager:
     """Class for managing jobs for async task create and update requests
@@ -35,19 +35,14 @@ class JobManager:
                 queue_region,
                 queue_name, 
                 task_handler_uri,
-                db_name=None):
+                db_params=None):
 
         self.cloud_run_sa = cloud_run_sa
         self.tag_engine_project = tag_engine_project
         self.queue_region = queue_region
         self.queue_name = queue_name
         self.task_handler_uri = task_handler_uri
-        self.db_name = db_name
-        
-        if self.db_name is not None:
-            self.db = firestore.Client(database=self.db_name)
-        else:
-            self.db = firestore.Client()
+        self.db = psycopg2.connect(**db_params)
 
 
 ##################### API METHODS #################
@@ -64,28 +59,27 @@ class JobManager:
         
         resp = self._create_job_task(tag_creator_account, tag_invoker_account, job_uuid, config_uuid, config_type)
                 
-        return job_uuid 
-        
-    
-    def update_job_running(self, job_uuid):     
+        return job_uuid
 
-        #print('*** update_job_running ***')
-        
-        job_ref = self.db.collection('jobs').document(job_uuid)
-        job_ref.update({'job_status': 'RUNNING'})
+    def update_job_running(self, job_uuid):
+
+        print('*** update_job_running ***')
+
+        with self.db.cursor() as cur:
+            cur.execute(f"UPDATE jobs SET job_status = 'RUNNING' WHERE job_uuid = '{job_uuid}'")
+            self.db.commit()
         
         print('Set job running.')
 
-    
     def record_num_tasks(self, job_uuid, num_tasks):
         
-        #print('*** enter record_num_tasks ***')
-        
-        job_ref = self.db.collection('jobs').document(job_uuid)
-        job_ref.update({'task_count': num_tasks})
+        print('*** enter record_num_tasks ***')
+
+        with self.db.cursor() as cur:
+            cur.execute(f"UPDATE jobs SET task_count = {num_tasks} WHERE job_uuid = '{job_uuid}'")
+            self.db.commit()
         
         print('record_num_tasks')
-        
 
     def calculate_job_completion(self, job_uuid):
         
@@ -99,69 +93,61 @@ class JobManager:
         print('tasks_success:', tasks_success)
         print('tasks_failed:', tasks_failed)
         print('tasks_ran:', tasks_ran)
-        
-        job_ref = self.db.collection('jobs').document(job_uuid)
-        job = job_ref.get()
 
-        if job.exists:
-            
-            job_dict = job.to_dict()
-            task_count = job_dict['task_count']
-            
-            # job running
-            if job_dict['task_count'] > tasks_ran:
-                job_ref.update({
-                    'tasks_ran': tasks_success + tasks_failed,
-                    'job_status': 'RUNNING',
-                    'tasks_success': tasks_success,
-                    'tasks_failed': tasks_failed,
-                })
-                
-                pct_complete = round(tasks_ran / task_count * 100, 2)
-            
-            # job completed
-            if job_dict['task_count'] <= tasks_ran:
-                
-                if tasks_failed > 0:
-                    
-                    job_ref.update({
-                        'tasks_ran': tasks_success + tasks_failed,
-                        'tasks_success': tasks_success,
-                        'tasks_failed': tasks_failed,
-                        'job_status': 'ERROR',
-                        'completion_time': datetime.datetime.utcnow()
-                    })
-                
-                else:
+        with self.db.cursor(cursor_factory=extras.DictCursor) as cur:
+            cur.execute(f"SELECT * FROM jobs WHERE job_uuid = '{job_uuid}'")
+            jobs = cur.fetchall()
 
-                    job_ref.update({
-                        'tasks_ran': tasks_success + tasks_failed,
-                        'tasks_success': tasks_success,
-                        'tasks_failed': tasks_failed,
-                        'job_status': 'SUCCESS',
-                        'completion_time': datetime.datetime.utcnow()
-                    })
-                
-                pct_complete = 100     
+            for job in jobs:
+                job_dict = dict(job)
+                task_count = job_dict['task_count']
+
+                # job running
+                if job_dict['task_count'] > tasks_ran:
+
+                    t_ran = tasks_success + tasks_failed
+                    cur.execute(f"""UPDATE jobs SET tasks_ran = {t_ran}, job_status = 'RUNNING', 
+                    tasks_success = {tasks_success}, tasks_failed = {tasks_failed} WHERE job_uuid = '{job_uuid}'""")
+                    self.db.commit()
+
+                    pct_complete = round(tasks_ran / task_count * 100, 2)
+
+                # job completed
+                if job_dict['task_count'] <= tasks_ran:
+
+                    if tasks_failed > 0:
+                        t_ran = tasks_success + tasks_failed
+                        cur.execute(f"""UPDATE jobs SET tasks_ran = {t_ran}, job_status = 'ERROR', 
+                        tasks_success = {tasks_success}, tasks_failed = {tasks_failed}, 
+                        completion_time = {datetime.datetime.utcnow()} WHERE job_uuid = '{job_uuid}'""")
+                        self.db.commit()
+
+                    else:
+                        t_ran = tasks_success + tasks_failed
+                        cur.execute(f"""UPDATE jobs SET tasks_ran = {t_ran}, job_status = 'SUCCESS', 
+                        tasks_success = {tasks_success}, tasks_failed = {tasks_failed}, 
+                        completion_time = {datetime.datetime.utcnow()} WHERE job_uuid = '{job_uuid}'""")
+                        self.db.commit()
+
+                    pct_complete = 100
 
         return tasks_success, tasks_failed, pct_complete
-                  
 
     def get_job_status(self, job_uuid):
-        
-        job = self.db.collection('jobs').document(job_uuid).get()
 
-        if job.exists:
-            job_dict = job.to_dict()
-            return job_dict
+        with self.db.cursor(cursor_factory=extras.DictCursor) as cur:
+            cur.execute(f"SELECT * FROM jobs WHERE job_uuid = '{job_uuid}'")
+            jobs = cur.fetchall()
 
+            for job in jobs:
+                return dict(job)
 
     def set_job_status(self, job_uuid, status):
-        
-        self.db.collection('jobs').document(job_uuid).update({
-            'job_status': status
-        })
-            
+
+        with self.db.cursor() as cur:
+            cur.execute(f"UPDATE jobs SET job_status = '{status}' WHERE job_uuid = '{job_uuid}'")
+            self.db.commit()
+
 
 ################ INTERNAL PROCESSING METHODS #################
 
@@ -171,25 +157,26 @@ class JobManager:
         
         job_uuid = uuid.uuid1().hex
 
-        job_ref = self.db.collection('jobs').document(job_uuid)
-
-        job_ref.set({
-            'job_uuid': job_uuid,
-            'config_uuid': config_uuid,
-            'config_type': config_type,
-            'job_status':  'PENDING',
-            'task_count': 0,
-            'tasks_ran': 0,
-            'tasks_success': 0,
-            'tasks_failed': 0,
-            'creation_time': datetime.datetime.utcnow()
-        })
+        with self.db.cursor() as cur:
+            job_ref = {
+                'job_uuid': job_uuid,
+                'config_uuid': config_uuid,
+                'config_type': config_type,
+                'job_status':  'PENDING',
+                'task_count': 0,
+                'tasks_ran': 0,
+                'tasks_success': 0,
+                'tasks_failed': 0,
+                'creation_time': datetime.datetime.utcnow()
+            }
+            cols, values = dict_to_query(job_ref)
+            cur.execute(f"INSERT INTO jobs {cols} VALUES {values}")
+            self.db.commit()
         
         print('Created job record.')
     
         return job_uuid
 
-    
     def _create_job_task(self, tag_creator_account, tag_invoker_account, job_uuid, config_uuid, config_type):
         
         print('*** enter _create_cloud_task ***')
@@ -219,53 +206,56 @@ class JobManager:
 
     def _get_task_count(self, job_uuid):
         
-        #print('*** enter _get_task_count ***')
-        
-        job = self.db.collection('jobs').document(job_uuid).get()
+        print('*** enter _get_task_count ***')
 
-        if job.exists:
-            job_dict = job.to_dict()
-            return job_dict['task_count']
-        
+        with self.db.cursor(cursor_factory=extras.DictCursor) as cur:
+            cur.execute(f"SELECT task_count FROM jobs WHERE job_uuid = '{job_uuid}'")
+            jobs = cur.fetchall()
+
+            for job in jobs:
+                return dict(job).get('task_count')
 
     def _get_tasks_success(self, job_uuid):
         
         tasks_success = 0
-        
-        shards = self.db.collection('shards').where(filter=FieldFilter('job_uuid', '==', job_uuid)).stream()
-        
-        for shard in shards:
-            tasks_success += shard.to_dict().get('tasks_success', 0) 
+
+        with self.db.cursor(cursor_factory=extras.DictCursor) as cur:
+            cur.execute(f"""SELECT tasks_success FROM shards WHERE job_uuid = '{job_uuid}'""")
+            shards = cur.fetchall()
+
+            for shard in shards:
+                tasks_success += dict(shard).get('tasks_success', 0)
         
         return tasks_success
-   
-      
-    def _get_tasks_failed(self, job_uuid):
-       
-       tasks_failed = 0
-       
-       shards = self.db.collection('shards').where(filter=FieldFilter('job_uuid', '==', job_uuid)).stream()
-       
-       for shard in shards:
-           tasks_failed += shard.to_dict().get('tasks_failed', 0) 
-       
-       return tasks_failed
 
+    def _get_tasks_failed(self, job_uuid):
+
+        tasks_failed = 0
+
+        with self.db.cursor(cursor_factory=extras.DictCursor) as cur:
+            cur.execute(f"""SELECT tasks_failed FROM shards WHERE job_uuid = '{job_uuid}'""")
+            shards = cur.fetchall()
+
+            for shard in shards:
+                tasks_failed += dict(shard).get('tasks_failed', 0)
+
+        return tasks_failed
 
     def _create_job_metadata_record(self, job_uuid, config_uuid, config_type, metadata):
-        
-        print('*** _create_job_metadata_record ***')
-        
-        job_ref = self.db.collection('job_metadata').document(job_uuid)
 
-        job_ref.set({
-            'job_uuid': job_uuid,
-            'config_uuid': config_uuid,
-            'config_type': config_type,
-            'metadata': metadata,
-            'creation_time': datetime.datetime.utcnow()
-        })
-        
+        print('*** _create_job_metadata_record ***')
+
+        with self.db.cursor() as cur:
+            job_ref = {
+                'job_uuid': job_uuid,
+                'config_uuid': config_uuid,
+                'config_type': config_type,
+                'metadata': metadata,
+                'creation_time': datetime.datetime.utcnow()
+            }
+            cols, values = dict_to_query(job_ref)
+            cur.execute(f"INSERT INTO job_metadata {cols} VALUES {values}")
+            self.db.commit()
         print('Created job_metadata record.')
     
         
@@ -279,7 +269,15 @@ if __name__ == '__main__':
     queue_name = config['DEFAULT']['INJECTOR_QUEUE']
     db_name = config['DEFAULT'].get('DB_NAME', None)
     task_handler_uri = '/_split_work'
-    jm = JobManager(project, region, queue_name, task_handler_uri, db_name)
+
+    # get section, default to POSTGRESQL
+    db_params = {}
+    if config.has_section('POSTGRESQL'):
+        params = config.items('POSTGRESQL')
+        for param in params:
+            db_params[param[0]] = param[1]
+
+    jm = JobManager(project, region, queue_name, task_handler_uri, db_params)
     
     config_uuid = '1f1b4720839c11eca541e1ad551502cb'
     jm.create_async_job(config_uuid)
