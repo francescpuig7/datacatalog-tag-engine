@@ -14,8 +14,10 @@
 
 import uuid, hashlib, datetime, json, configparser, math
 import constants
-from google.cloud import firestore
+import psycopg2
 from google.cloud import tasks_v2
+
+from db.query_builder import dict_to_query
 
 
 class TaskManager:
@@ -33,25 +35,21 @@ class TaskManager:
                 queue_region,
                 queue_name, 
                 task_handler_uri,
-                db_name=None):
+                db_params=None):
 
         self.cloud_run_sa = cloud_run_sa
         self.tag_engine_project = tag_engine_project
         self.queue_region = queue_region
         self.queue_name = queue_name
         self.task_handler_uri = task_handler_uri
-        self.db_name = db_name
+        self.db = psycopg2.connect(**db_params)
 
-        if self.db_name is not None:
-            self.db = firestore.Client(database=self.db_name)
-        else:
-            self.db = firestore.Client()
         self.tasks_per_shard = 1000
 
 ##################### API METHODS #################
         
     def create_config_uuid_tasks(self, tag_creator_account, tag_invoker_account, job_uuid, config_uuid, config_type, uris):
-        
+        """ Wrapped """
         print('*** enter create_config_uuid_tasks ***')
         
         # create shards of 1000 tasks
@@ -95,9 +93,8 @@ class TaskManager:
         if task_counter > 0:    
             self._update_shard_tasks(job_uuid, shard_uuid, task_counter)
 
-    
     def create_tag_extract_tasks(self, tag_creator_account, tag_invoker_account, job_uuid, config_uuid, config_type, tag_extract_list):
-        
+        """ Wrapped """
         print('*** enter create_tag_extract_tasks ***')
         #print('len(tag_extract_list): ', len(tag_extract_list))
         
@@ -143,9 +140,8 @@ class TaskManager:
         if task_counter > 0:    
             self._update_shard_tasks(job_uuid, shard_uuid, task_counter)
 
-         
-    def update_task_status(self, shard_uuid, task_uuid, status):     
-
+    def update_task_status(self, shard_uuid, task_uuid, status):
+        """ Wrapped """
         if status == 'RUNNING':
             self._set_task_running(shard_uuid, task_uuid)
             self._set_rollup_tasks_running(shard_uuid)
@@ -162,82 +158,67 @@ class TaskManager:
 ################ INTERNAL PROCESSING METHODS #################
 
     def _create_shard(self, job_uuid, shard_uuid):
-        
+        """ Wrapped """
         print('*** _create_shard ***')
         print('job_uuid: ' + job_uuid + ', shard_uuid: ' + shard_uuid)
-        
-        shard_ref = self.db.collection('shards').document(shard_uuid)
-        
-        shard_ref.set({
-            'shard_uuid': shard_uuid,   
-            'job_uuid': job_uuid,
-            'tasks_ran': 0,
-            'tasks_success': 0,
-            'tasks_failed': 0,
-            'creation_time': datetime.datetime.utcnow()
-        })
-        
-    
-    def _update_shard_tasks(self, job_uuid, shard_uuid, task_counter):
-        
-        #print('*** _update_shard ***')
 
-        self.db.collection('shards').document(shard_uuid).update({'task_count': task_counter});
-        
+        with self.db.cursor() as cur:
+            shard_ref = {
+                'shard_uuid': shard_uuid,
+                'job_uuid': job_uuid,
+                'tasks_ran': 0,
+                'tasks_success': 0,
+                'tasks_failed': 0,
+                'creation_time': datetime.datetime.utcnow()
+            }
+            cols, values = dict_to_query(shard_ref)
+            cur.execute(f"INSERT INTO shards {cols} VALUES {values}")
+            self.db.commit()
+
+    def _update_shard_tasks(self, job_uuid, shard_uuid, task_counter):
+        """ Wrapped """
+        print('*** _update_shard ***')
+        with self.db.cursor() as cur:
+            cur.execute(f"UPDATE shards SET task_count = {task_counter} WHERE shard_uuid = '{shard_uuid}'")
+            self.db.commit()
 
     def _record_config_uuid_task(self, job_uuid, shard_uuid, task_id, config_uuid, config_type, uri):
-        
-        #print('*** _record_config_uuid_task ***')
+        """ Wrapped """
+        print('*** _record_config_uuid_task ***')
         
         task_uuid = uuid.uuid1().hex
-        
-        task_ref = self.db.collection('shards').document(shard_uuid).collection('tasks').document(task_uuid)
 
-        task_ref.set({
-            'task_uuid': task_uuid,     # task identifier in Firestore
-            'task_id': task_id,         # cloud task identifier, based on uri
-            'shard_uuid': shard_uuid,   # shard which this task belongs to
-            'job_uuid': job_uuid,
-            'config_uuid': config_uuid,
-            'config_type': config_type,
-            'uri': uri,
-            'status':  'PENDING',
-            'creation_time': datetime.datetime.utcnow()
-        })
-        
-        #print('created task record ' + task_uuid + ' in shard ' + shard_uuid)
-         
-        return task_uuid    
-    
-    
+        with self.db.cursor() as cur:
+            cur.execute(f"""INSERT INTO tasks (task_uuid,task_id,shard_uuid,job_uuid,config_uuid,config_type,
+            uri,status,creation_time) VALUES ('{task_uuid}','{task_id}','{shard_uuid}','{job_uuid}',
+            '{config_uuid}','{config_type}','{uri}','PENDING','{datetime.datetime.utcnow()}')""")
+            self.db.commit()
+
+        print('created task record ' + task_uuid + ' in shard ' + shard_uuid)
+        #task_ref = self.db.collection('shards').document(shard_uuid).collection('').document(task_uuid) TODO: test this
+
+        return task_uuid
+
     def _record_tag_extract_task(self, job_uuid, shard_uuid, task_id, config_uuid, config_type, extract):
-        
+        """ Wrapped """
         print('*** _record_task ***')
         
         task_uuid = uuid.uuid1().hex
-        
-        task_ref = self.db.collection('shards').document(shard_uuid).collection('tasks').document(task_uuid)
 
-        task_ref.set({
-            'task_uuid': task_uuid,     # task identifier in Firestore
-            'task_id': task_id,         # cloud task identifier, based on uri
-            'shard_uuid': shard_uuid,   # shard which this task belongs to
-            'job_uuid': job_uuid,
-            'config_uuid': config_uuid,
-            'config_type': config_type,
-            'tag_extract': extract,
-            'status':  'PENDING',
-            'creation_time': datetime.datetime.utcnow()
-        })
+        with self.db.cursor() as cur:
+            cur.execute(f"""INSERT INTO tasks (task_uuid,task_id,shard_uuid,job_uuid,config_uuid,config_type,
+            tag_extract,status,creation_time) VALUES ('{task_uuid}','{task_id}','{shard_uuid}','{job_uuid}',
+            '{config_uuid}','{config_type}','{extract}','PENDING','{datetime.datetime.utcnow()}')""")
+            self.db.commit()
         
-        #print('created task record ' + task_uuid + ' in shard ' + shard_uuid)
+            #task_ref = self.db.collection('shards').document(shard_uuid).collection('tasks').document(task_uuid) TODO: test
+            print('created task record ' + task_uuid + ' in shard ' + shard_uuid)
          
         return task_uuid
-    
-    
+
     def _create_config_uuid_task(self, tag_creator_account, tag_invoker_account, job_uuid, shard_uuid, task_uuid, task_id, \
                                  config_uuid, config_type, uri):
-        
+        """ Wrapped """
         print('*** enter _create_config_uuid_task ***')
  
         success = True
@@ -270,10 +251,9 @@ class TaskManager:
             success = False
             
         return success
-                  
-        
+
     def _create_tag_extract_task(self, tag_creator_account, tag_invoker_account, job_uuid, shard_uuid, task_uuid, task_id, config_uuid, config_type, extract):
-        
+        """ Wrapped """
         print('*** enter _create_tag_extract_task ***')
  
         success = True
@@ -305,66 +285,62 @@ class TaskManager:
             success = False
             
         return success
-            
-    
-    def _set_task_running(self, shard_uuid, task_uuid):
-        
-        #print('*** _set_task_running ***')
-        
-        task_ref = self.db.collection('shards').document(shard_uuid).collection('tasks').document(task_uuid)
-        
-        task_ref.set({
-            'status':  'RUNNING',
-            'start_time': datetime.datetime.utcnow()
-        }, merge=True)
-        
-        print('set task running.')
-    
-    
-    def _set_rollup_tasks_running(self, shard_uuid):
-        
-        shard_ref = self.db.collection('shards').document(shard_uuid)
-        shard_ref.update({'tasks_running': firestore.Increment(1)})
-    
-    
-    def _set_task_success(self, shard_uuid, task_uuid):
-        
-        print('*** _set_task_success ***')
-        
-        task_ref = self.db.collection('shards').document(shard_uuid).collection('tasks').document(task_uuid)
 
-        task_ref.set({
-            'status':  'SUCCESS',
-            'end_time': datetime.datetime.utcnow()
-        }, merge=True)
-        
+    def _set_task_running(self, shard_uuid, task_uuid):
+        """ Wrapped """
+        print('*** _set_task_running ***')
+
+        with self.db.cursor() as cur:
+            cur.execute(f"""UPDATE tasks SET status = 'RUNNING', start_time = '{datetime.datetime.utcnow()}' 
+            WHERE shard_uuid = '{shard_uuid}' AND task_uuid = '{task_uuid}'""")
+            self.db.commit()
+        print('set task running.')
+
+    def _set_rollup_tasks_running(self, shard_uuid):
+        """ Wrapped """
+        with self.db.cursor() as cur:
+            cur.execute(f"UPDATE shards SET tasks_running = tasks_running + 1 WHERE shard_uuid = '{shard_uuid}'")
+            self.db.commit()
+
+    def _set_task_success(self, shard_uuid, task_uuid):
+        """ Wrapped """
+        print('*** _set_task_success ***')
+
+        with self.db.cursor() as cur:
+            cur.execute(f"""UPDATE tasks SET status = 'SUCCESS', end_time = '{datetime.datetime.utcnow()}' 
+            WHERE shard_uuid = '{shard_uuid}' AND task_uuid = '{task_uuid}'""")
+            self.db.commit()
         print('set task success.')
 
-
     def _set_rollup_tasks_success(self, shard_uuid):
-        
-        shard_ref = self.db.collection('shards').document(shard_uuid)
-        shard_ref.update({'tasks_success': firestore.Increment(1), 'tasks_running': firestore.Increment(-1)})
-        
-        
-    def _set_task_failed(self, shard_uuid, task_uuid):
-        
-        print('*** _set_task_failed ***')
-        
-        task_ref = self.db.collection('shards').document(shard_uuid).collection('tasks').document(task_uuid)
+        """ Wrapped """
+        with self.db.cursor() as cur:
+            cur.execute(f"""UPDATE shards SET 
+            tasks_success = tasks_success + 1, 
+            tasks_running = tasks_running - 1 
+            WHERE shard_uuid = '{shard_uuid}'""")
+            self.db.commit()
 
-        task_ref.set({
-            'status':  'ERROR',
-            'end_time': datetime.datetime.utcnow()
-        }, merge=True)
+    def _set_task_failed(self, shard_uuid, task_uuid):
+        """ Wrapped """
+        print('*** _set_task_failed ***')
+
+        with self.db.cursor() as cur:
+            cur.execute(f"""UPDATE tasks SET status = 'ERROR', end_time = '{datetime.datetime.utcnow()}' 
+            WHERE shard_uuid = '{shard_uuid}' AND task_uuid = '{task_uuid}'""")
+            self.db.commit()
         
         print('set task failed.')
-        
-    
+
     def _set_rollup_tasks_failed(self, shard_uuid):
-        
-        shard_ref = self.db.collection('shards').document(shard_uuid)
-        shard_ref.update({'tasks_failed': firestore.Increment(1), 'tasks_running': firestore.Increment(-1)})
+        """ Wrapped """
+        with self.db.cursor() as cur:
+            cur.execute(f"""UPDATE shards SET 
+            tasks_failed = tasks_failed + 1, 
+            tasks_running = tasks_running - 1 
+            WHERE shard_uuid = '{shard_uuid}'""")
+            self.db.commit()
+
     
 
 
