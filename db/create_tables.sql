@@ -221,7 +221,12 @@ CREATE TABLE IF NOT EXISTS import_configs (
     template_id VARCHAR,
     template_project VARCHAR,
     template_region VARCHAR,
-    template_uuid VARCHAR
+    template_uuid VARCHAR,
+    next_run TIMESTAMP WITH TIME ZONE,
+    refresh_frequency INTEGER,
+    refresh_mode VARCHAR (25),
+    refresh_unit VARCHAR (25),
+    scheduling_status VARCHAR (25)
 );
 
 CREATE TABLE IF NOT EXISTS restore_configs (
@@ -240,6 +245,11 @@ CREATE TABLE IF NOT EXISTS restore_configs (
     source_template_region VARCHAR,
     overwrite BOOLEAN,
     tag_history BOOLEAN,
+    next_run TIMESTAMP WITH TIME ZONE,
+    refresh_frequency INTEGER,
+    refresh_mode VARCHAR (25),
+    refresh_unit VARCHAR (25),
+    scheduling_status VARCHAR (25),
     service_account VARCHAR
 );
 
