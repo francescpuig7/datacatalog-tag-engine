@@ -3,6 +3,7 @@ ENV PYTHONUNBUFFERED True
 ENV APP_HOME /tag-engine
 WORKDIR $APP_HOME
 COPY . ./
+RUN apt-get update && apt-get -y install libpq-dev gcc
 RUN pip3 install Flask gunicorn
 RUN pip3 install --no-cache-dir -r $APP_HOME/requirements.txt
 ENV PORT 8080

@@ -39,7 +39,7 @@ class TagEngineStoreHandler:
 
     @staticmethod
     def config(filename='tagengine.ini', section='POSTGRESQL'):
-        """ Get config data from file .ini
+        """ Get config data from file .ini and section
         """
         config = configparser.ConfigParser()
         config.read(filename)
