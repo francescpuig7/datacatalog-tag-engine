@@ -53,21 +53,21 @@ config.read("tagengine.ini")
 
 ##################### INIT GLOBAL VARIABLES ##################################
     
-TAG_ENGINE_PROJECT = config['DEFAULT']['TAG_ENGINE_PROJECT'].strip()
-TAG_ENGINE_REGION = config['DEFAULT']['TAG_ENGINE_REGION'].strip()
+TAG_ENGINE_PROJECT = config['default']['TAG_ENGINE_PROJECT'].strip()
+TAG_ENGINE_REGION = config['default']['TAG_ENGINE_REGION'].strip()
     
-TAG_ENGINE_SA = config['DEFAULT']['TAG_ENGINE_SA'].strip()
-TAG_CREATOR_SA = config['DEFAULT']['TAG_CREATOR_SA'].strip()
+TAG_ENGINE_SA = config['default']['TAG_ENGINE_SA'].strip()
+TAG_CREATOR_SA = config['default']['TAG_CREATOR_SA'].strip()
 
-BIGQUERY_REGION = config['DEFAULT']['BIGQUERY_REGION'].strip()
+BIGQUERY_REGION = config['default']['BIGQUERY_REGION'].strip()
 
 SPLIT_WORK_HANDLER = os.environ['SERVICE_URL'] + '/_split_work'
 RUN_TASK_HANDLER = os.environ['SERVICE_URL'] + '/_run_task'
 
-INJECTOR_QUEUE = config['DEFAULT']['INJECTOR_QUEUE'].strip()
-WORK_QUEUE = config['DEFAULT']['WORK_QUEUE'].strip()
+INJECTOR_QUEUE = config['default']['INJECTOR_QUEUE'].strip()
+WORK_QUEUE = config['default']['WORK_QUEUE'].strip()
 
-DB_NAME = config['DEFAULT']['DB_NAME'].strip()
+DB_NAME = config['default']['DB_NAME'].strip()
 
 jm = jobm.JobManager(TAG_ENGINE_SA, TAG_ENGINE_PROJECT, TAG_ENGINE_REGION, INJECTOR_QUEUE, SPLIT_WORK_HANDLER, DB_NAME)
 tm = taskm.TaskManager(TAG_ENGINE_SA, TAG_ENGINE_PROJECT, TAG_ENGINE_REGION, WORK_QUEUE, RUN_TASK_HANDLER, DB_NAME)
@@ -77,33 +77,33 @@ SCOPES = ['openid', 'https://www.googleapis.com/auth/cloud-platform', 'https://w
 USER_AGENT = 'cloud-solutions/datacatalog-tag-engine-v2'
 store = tesh.TagEngineStoreHandler()
 
-if 'ENABLE_TAG_HISTORY' in config['DEFAULT'] and config['DEFAULT']['ENABLE_TAG_HISTORY'].strip().lower() == 'true':
+if 'ENABLE_TAG_HISTORY' in config['default'] and config['default']['ENABLE_TAG_HISTORY'].strip().lower() == 'true':
     ENABLE_TAG_HISTORY = True
 else:
     ENABLE_TAG_HISTORY = False
 
-if 'TAG_HISTORY_PROJECT' in config['DEFAULT']:
-    TAG_HISTORY_PROJECT = config['DEFAULT']['TAG_HISTORY_PROJECT'].strip()
+if 'TAG_HISTORY_PROJECT' in config['default']:
+    TAG_HISTORY_PROJECT = config['default']['TAG_HISTORY_PROJECT'].strip()
 else:
     TAG_HISTORY_PROJECT = None
 
-if 'TAG_HISTORY_DATASET' in config['DEFAULT']:    
-    TAG_HISTORY_DATASET = config['DEFAULT']['TAG_HISTORY_DATASET'].strip()
+if 'TAG_HISTORY_DATASET' in config['default']:
+    TAG_HISTORY_DATASET = config['default']['TAG_HISTORY_DATASET'].strip()
 else:
     TAG_HISTORY_DATASET = None
     
-if 'ENABLE_JOB_METADATA' in config['DEFAULT'] and config['DEFAULT']['ENABLE_JOB_METADATA'].strip().lower() == 'true':    
+if 'ENABLE_JOB_METADATA' in config['default'] and config['default']['ENABLE_JOB_METADATA'].strip().lower() == 'true':
     ENABLE_JOB_METADATA = True
 else:
     ENABLE_JOB_METADATA = False
     
-if 'JOB_METADATA_PROJECT' in config['DEFAULT']:
-    JOB_METADATA_PROJECT = config['DEFAULT']['JOB_METADATA_PROJECT'].strip()
+if 'JOB_METADATA_PROJECT' in config['default']:
+    JOB_METADATA_PROJECT = config['default']['JOB_METADATA_PROJECT'].strip()
 else:
     JOB_METADATA_PROJECT = None
 
-if 'JOB_METADATA_DATASET' in config['DEFAULT']:    
-    JOB_METADATA_DATASET = config['DEFAULT']['JOB_METADATA_DATASET'].strip()
+if 'JOB_METADATA_DATASET' in config['default']:
+    JOB_METADATA_DATASET = config['default']['JOB_METADATA_DATASET'].strip()
 else:
     JOB_METADATA_DATASET = None
 
@@ -118,7 +118,7 @@ check_service_url()
 
 ##################### CHECK AUTH and CLIENT SECRET VARIABLES #####################
     
-if config['DEFAULT']['ENABLE_AUTH'].lower() == 'true' or config['DEFAULT']['ENABLE_AUTH'] == 1:
+if config['default']['ENABLE_AUTH'].lower() == 'true' or config['default']['ENABLE_AUTH'] == 1:
     ENABLE_AUTH = True
     print('Info: ENABLE_AUTH = True')
 else:
@@ -126,8 +126,8 @@ else:
     print('Info: ENABLE_AUTH = False. This option is only supported in API mode as the client secret is needed to obtain an access token from the UI.')
 
 
-if 'OAUTH_CLIENT_CREDENTIALS' in config['DEFAULT']:
-    OAUTH_CLIENT_CREDENTIALS = config['DEFAULT']['OAUTH_CLIENT_CREDENTIALS'].strip()
+if 'OAUTH_CLIENT_CREDENTIALS' in config['default']:
+    OAUTH_CLIENT_CREDENTIALS = config['default']['OAUTH_CLIENT_CREDENTIALS'].strip()
     print('Info: OAUTH_CLIENT_CREDENTIALS =', OAUTH_CLIENT_CREDENTIALS)
 else:
     if 'tag-engine-ui-' in os.environ['SERVICE_URL']:

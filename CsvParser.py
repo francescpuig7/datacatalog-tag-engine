@@ -71,7 +71,7 @@ if __name__ == '__main__':
     config.read("tagengine.ini")
     
     source_credentials, _ = google.auth.default() 
-    target_service_account = config['DEFAULT']['TAG_CREATOR_SA']
+    target_service_account = config['default']['TAG_CREATOR_SA']
     
     credentials = impersonated_credentials.Credentials(source_credentials=source_credentials,
         target_principal=target_service_account,

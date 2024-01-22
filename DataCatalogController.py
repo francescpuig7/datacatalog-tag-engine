@@ -38,7 +38,7 @@ from common import log_error, log_info
 
 config = configparser.ConfigParser()
 config.read("tagengine.ini")
-BIGQUERY_REGION = config['DEFAULT']['BIGQUERY_REGION']
+BIGQUERY_REGION = config['default']['BIGQUERY_REGION']
 USER_AGENT = 'cloud-solutions/datacatalog-tag-engine-v2'
 
 class DataCatalogController:
@@ -2090,7 +2090,7 @@ if __name__ == '__main__':
     SCOPES = ['openid', 'https://www.googleapis.com/auth/cloud-platform', 'https://www.googleapis.com/auth/userinfo.email']
     
     source_credentials, _ = google.auth.default() 
-    target_service_account = config['DEFAULT']['TAG_CREATOR_SA']
+    target_service_account = config['default']['TAG_CREATOR_SA']
     
     credentials = impersonated_credentials.Credentials(source_credentials=source_credentials,
         target_principal=target_service_account,

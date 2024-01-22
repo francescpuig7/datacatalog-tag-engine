@@ -479,8 +479,8 @@ if __name__ == '__main__':
     config = configparser.ConfigParser()
     config.read("tagengine.ini")
     
-    BIGQUERY_REGION = config['DEFAULT']['BIGQUERY_REGION']
-    target_service_account = config['DEFAULT']['TAG_CREATOR_SA']
+    BIGQUERY_REGION = config['default']['BIGQUERY_REGION']
+    target_service_account = config['default']['TAG_CREATOR_SA']
     
     credentials = impersonated_credentials.Credentials(source_credentials=source_credentials,
         target_principal=target_service_account,

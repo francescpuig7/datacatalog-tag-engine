@@ -47,13 +47,13 @@ class JobManager:
         self.db = psycopg2.connect(**db_params)
 
     @staticmethod
-    def config(filename='tagengine.ini', section='POSTGRESQL'):
+    def config(filename='tagengine.ini', section='postgresql'):
         """ Get config data from file .ini
         """
         config = configparser.ConfigParser()
         config.read(filename)
 
-        # get section, default to POSTGRESQL
+        # get section, default to postgresql
         db = {}
         if config.has_section(section):
             params = config.items(section)
@@ -283,10 +283,10 @@ if __name__ == '__main__':
     config = configparser.ConfigParser()
     config.read("tagengine.ini")
     
-    project = config['DEFAULT']['PROJECT']
-    region = config['DEFAULT']['REGION']
-    queue_name = config['DEFAULT']['INJECTOR_QUEUE']
-    db_name = config['DEFAULT'].get('DB_NAME', None)
+    project = config['default']['PROJECT']
+    region = config['default']['REGION']
+    queue_name = config['default']['INJECTOR_QUEUE']
+    db_name = config['default'].get('DB_NAME', None)
     task_handler_uri = '/_split_work'
 
     jm = JobManager(project, region, queue_name, task_handler_uri, db_name)

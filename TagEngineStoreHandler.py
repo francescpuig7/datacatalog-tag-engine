@@ -38,13 +38,13 @@ class TagEngineStoreHandler:
         self.db = psycopg2.connect(**db_params)
 
     @staticmethod
-    def config(filename='tagengine.ini', section='POSTGRESQL'):
+    def config(filename='tagengine.ini', section='postgresql'):
         """ Get config data from file .ini and section
         """
         config = configparser.ConfigParser()
         config.read(filename)
 
-        # get section, default to POSTGRESQL
+        # get section, default to postgresql
         db = {}
         if config.has_section(section):
             params = config.items(section)
