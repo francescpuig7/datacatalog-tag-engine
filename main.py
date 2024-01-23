@@ -3260,7 +3260,7 @@ def _split_work():
     
     if success == False:
         print('Error acquiring credentials from', tag_creator_sa)
-        update_job_status(self, config_uuid, config_type, 'ERROR')
+        store.update_job_status(config_uuid, config_type, 'ERROR')
         resp = jsonify(success=False)
         return resp
        

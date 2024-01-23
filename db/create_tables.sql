@@ -82,6 +82,7 @@ CREATE TABLE IF NOT EXISTS static_asset_configs (
     template_project VARCHAR,
     template_region VARCHAR,
     template_uuid VARCHAR,
+    job_status VARCHAR (25),
     version SMALLINT
 );
 
@@ -160,6 +161,7 @@ CREATE TABLE IF NOT EXISTS sensitive_column_configs (
     template_project VARCHAR,
     template_region VARCHAR,
     template_uuid VARCHAR,
+    job_status VARCHAR (25),
     version SMALLINT
 );
 
@@ -185,6 +187,7 @@ CREATE TABLE IF NOT EXISTS glossary_asset_configs (
     template_project VARCHAR,
     template_region VARCHAR,
     template_uuid VARCHAR,
+    job_status VARCHAR (25),
     version SMALLINT
 );
 
@@ -206,6 +209,7 @@ CREATE TABLE IF NOT EXISTS export_configs (
     refresh_unit VARCHAR (25),
     scheduling_status VARCHAR (25),
     service_account VARCHAR,
+    job_status VARCHAR (25),
     version SMALLINT
 );
 
@@ -226,6 +230,7 @@ CREATE TABLE IF NOT EXISTS import_configs (
     refresh_frequency INTEGER,
     refresh_mode VARCHAR (25),
     refresh_unit VARCHAR (25),
+    job_status VARCHAR (25),
     scheduling_status VARCHAR (25)
 );
 
@@ -250,6 +255,7 @@ CREATE TABLE IF NOT EXISTS restore_configs (
     refresh_mode VARCHAR (25),
     refresh_unit VARCHAR (25),
     scheduling_status VARCHAR (25),
+    job_status VARCHAR (25),
     service_account VARCHAR
 );
 
@@ -273,6 +279,7 @@ CREATE TABLE IF NOT EXISTS entry_configs (
     template_project VARCHAR,
     template_region VARCHAR,
     template_uuid VARCHAR,
+    job_status VARCHAR (25),
     version SMALLINT
 );
 
