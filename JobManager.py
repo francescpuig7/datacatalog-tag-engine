@@ -138,14 +138,14 @@ class JobManager:
                         t_ran = tasks_success + tasks_failed
                         cur.execute(f"""UPDATE jobs SET tasks_ran = {t_ran}, job_status = 'ERROR', 
                         tasks_success = {tasks_success}, tasks_failed = {tasks_failed}, 
-                        completion_time = {datetime.datetime.utcnow()} WHERE job_uuid = '{job_uuid}'""")
+                        completion_time = '{datetime.datetime.utcnow()}' WHERE job_uuid = '{job_uuid}'""")
                         self.db.commit()
 
                     else:
                         t_ran = tasks_success + tasks_failed
                         cur.execute(f"""UPDATE jobs SET tasks_ran = {t_ran}, job_status = 'SUCCESS', 
                         tasks_success = {tasks_success}, tasks_failed = {tasks_failed}, 
-                        completion_time = {datetime.datetime.utcnow()} WHERE job_uuid = '{job_uuid}'""")
+                        completion_time = '{datetime.datetime.utcnow()}' WHERE job_uuid = '{job_uuid}'""")
                         self.db.commit()
 
                     pct_complete = 100
