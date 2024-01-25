@@ -2733,7 +2733,7 @@ Args:
     taxonomy_name: The name of the policy tag taxonomy to be created in Data Catalog. For example, data_sensitivity_categories
     policy_tag_labels: The list of policy tag labels for the taxonomy.
 Returns:
-    {success, policy_tag_taxonomy}
+    {success, policy_tags_taxonomy}
 """
 @app.route("/create_policy_tag_taxonomy", methods=['POST'])
 def create_policy_tag_taxonomy():
@@ -2757,14 +2757,13 @@ def create_policy_tag_taxonomy():
     success, taxonomy_name = create_taxonomy(project_id, region, taxonomy_name)
 
     if success:
-        res = create_policy_tags(taxonomy_name, ",".join(policy_tag_labels))
-        res = vars(res).get("name", None)
+        policy_tags_taxonomy = create_policy_tags(taxonomy_name, ",".join(policy_tag_labels))
     else:
         print("Error while creating policy tag taxonomy")
         resp = jsonify(success=False)
         return resp
 
-    return jsonify(success=success, policy_tag_taxonomy=res)
+    return jsonify(success=success, policy_tags_taxonomy=policy_tags_taxonomy)
 
 
 @app.route("/copy_tags", methods=['POST'])

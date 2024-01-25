@@ -44,6 +44,7 @@ def create_taxonomy(project_id, region, taxonomy_name):
 def create_policy_tags(taxonomy, policy_tag_labels):
     
     policy_tag_labels_list = policy_tag_labels.split(',')
+    created_ptags = list()
     
     for label in policy_tag_labels_list:
         
@@ -58,11 +59,12 @@ def create_policy_tags(taxonomy, policy_tag_labels):
         try:
             created_policy_tag = ptm.create_policy_tag(request=request)
             print(created_policy_tag)
-            return created_policy_tag
+            created_ptags.append(created_policy_tag.name)
         except Exception as e: 
             print('Error while creating policy tags: ', e)
             return False
-    
+        return created_ptags
+
 
 if __name__ == '__main__':
     
