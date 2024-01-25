@@ -58,8 +58,10 @@ def create_policy_tags(taxonomy, policy_tag_labels):
         try:
             created_policy_tag = ptm.create_policy_tag(request=request)
             print(created_policy_tag)
+            return created_policy_tag
         except Exception as e: 
             print('Error while creating policy tags: ', e)
+            return False
     
 
 if __name__ == '__main__':

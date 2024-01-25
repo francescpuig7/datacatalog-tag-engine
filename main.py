@@ -47,6 +47,7 @@ import JobManager as jobm
 import TaskManager as taskm
 import BigQueryUtils as bq
 import ConfigType as ct
+from helper_functions.create_policy_tag_taxonomy import create_taxonomy, create_policy_tags
 
 config = configparser.ConfigParser()
 config.read("tagengine.ini")
@@ -2725,6 +2726,46 @@ def create_export_config():
     return jsonify(config_uuid=config_uuid, config_type='TAG_EXPORT')
 
 
+"""
+Args:
+    project_id: The Google Cloud Project ID in which to create the policy tag taxonomy.
+    region: The Google Cloud region in which to create the tag template.
+    taxonomy_name: The name of the policy tag taxonomy to be created in Data Catalog. For example, data_sensitivity_categories
+    policy_tag_labels: The list of policy tag labels for the taxonomy.
+Returns:
+    {success, taxonomy_name, policy_tag_labels}
+"""
+@app.route("/create_policy_tag_taxonomy", methods=['POST'])
+def create_policy_tag_taxonomy():
+    json_request = request.get_json(force=True)
+    print('json request: ', json_request)
+
+    status, response, tag_creator_sa = do_authentication(request.headers, json_request, ENABLE_AUTH)
+    if not status:
+        return jsonify(response), 400
+
+    project_id = json_request.get('project_it', None)
+    region = json_request.get('region', None)
+    taxonomy_name = json_request.get('taxonomy_name', None)
+    policy_tag_labels = json_request.get('policy_tag_labels', [])
+    if not project_id or not region or not taxonomy_name or not policy_tag_labels or len(policy_tag_labels) == 0:
+        print("The create_policy_tag_taxonomy requires a project_it, region, taxonomy_name and policy_tag_labels"
+              " parameters. Please add the parameters to the json object.")
+        resp = jsonify(success=False)
+        return resp
+
+    success, taxonomy_name = create_taxonomy(project_id, region, taxonomy_name)
+
+    if success:
+        resp = create_policy_tags(taxonomy_name, ",".join(policy_tag_labels))
+    else:
+        print("Error while creating policy tag taxonomy")
+        resp = jsonify(success=False)
+        return resp
+
+    return jsonify(success=success, policy_tag_taxonomy=resp)
+
+
 @app.route("/copy_tags", methods=['POST'])
 def copy_tags():
     
@@ -3385,7 +3426,7 @@ def _run_task():
     print('*** enter _run_task ***')
     
     creation_status = constants.ERROR
-    
+
     json_request = request.get_json(force=True)
     job_uuid = json_request['job_uuid']
     config_uuid = json_request['config_uuid']
