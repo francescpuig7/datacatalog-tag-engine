@@ -63,7 +63,7 @@ def create_policy_tags(taxonomy, policy_tag_labels):
         except Exception as e: 
             print('Error while creating policy tags: ', e)
             return False
-        return created_ptags
+    return created_ptags
 
 
 if __name__ == '__main__':
