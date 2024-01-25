@@ -197,7 +197,8 @@ class TaskManager:
         """ Wrapped """
         print('*** _update_shard ***')
         with self.db.cursor() as cur:
-            cur.execute(f"UPDATE shards SET task_count = {task_counter} WHERE shard_uuid = '{shard_uuid}'")
+            cur.execute(f"""UPDATE shards SET task_count = {task_counter} WHERE shard_uuid = '{shard_uuid}' 
+            AND job_uuid = '{job_uuid}'""")
             self.db.commit()
 
     def _record_config_uuid_task(self, job_uuid, shard_uuid, task_id, config_uuid, config_type, uri):

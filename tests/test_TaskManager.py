@@ -33,6 +33,6 @@ class TestTaskManager(TestCase):
         test_count += 1
 
         task_uuid = tm._record_config_uuid_task(
-            job_uuid + "9", shard_uuid + "10", shard_uuid + "11", config_uuid, 'TEST_TYPE', 'localhost')
+            job_uuid + "9", shard_uuid, 'task_id', config_uuid, 'TEST_TYPE', 'localhost')
         self.assertIsInstance(task_uuid, str)
         print(f'{test_count}: _record_config_uuid_task task_uuid --> {task_uuid}')

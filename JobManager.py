@@ -221,7 +221,6 @@ class JobManager:
         #print('task resp: ', resp)
         
         return resp
-      
 
     def _get_task_count(self, job_uuid):
         
@@ -232,7 +231,7 @@ class JobManager:
             jobs = cur.fetchall()
 
             for job in jobs:
-                return dict(job).get('task_count')
+                return dict(job).get('task_count', 0)
 
     def _get_tasks_success(self, job_uuid):
         
