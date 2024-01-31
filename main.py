@@ -45,6 +45,7 @@ import constants
 
 import JobManager as jobm
 import TaskManager as taskm
+import PolicyTagManager as ptm
 import BigQueryUtils as bq
 import ConfigType as ct
 from helper_functions.create_policy_tag_taxonomy import create_taxonomy, create_policy_tags
@@ -72,6 +73,7 @@ DB_NAME = config['default']['DB_NAME'].strip()
 
 jm = jobm.JobManager(TAG_ENGINE_SA, TAG_ENGINE_PROJECT, TAG_ENGINE_REGION, INJECTOR_QUEUE, SPLIT_WORK_HANDLER, DB_NAME)
 tm = taskm.TaskManager(TAG_ENGINE_SA, TAG_ENGINE_PROJECT, TAG_ENGINE_REGION, WORK_QUEUE, RUN_TASK_HANDLER, DB_NAME)
+pm = ptm.PolicyTagManager(TAG_ENGINE_SA, TAG_ENGINE_PROJECT, TAG_ENGINE_REGION)
 
 SCOPES = ['openid', 'https://www.googleapis.com/auth/cloud-platform', 'https://www.googleapis.com/auth/userinfo.email']
  
@@ -2764,6 +2766,21 @@ def create_policy_tag_taxonomy():
         return resp
 
     return jsonify(success=success, policy_tags_taxonomy=policy_tags_taxonomy)
+
+
+"""
+Returns:
+    {success, object}
+"""
+@app.route("/list_taxonomies", methods=['GET'])
+def list_taxonomies():
+    try:
+        resp = pm.list_taxonomies()
+    except Exception as err:
+        print("Error while creating policy tag taxonomy")
+        resp = jsonify(success=False, error=err)
+        return resp
+    return jsonify(success=True, object=resp)
 
 
 @app.route("/copy_tags", methods=['POST'])
