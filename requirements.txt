@@ -9,6 +9,7 @@ google-cloud-tasks==2.13.1
 google-cloud-pubsub
 google-cloud-resource-manager
 google-cloud-logging
+google-cloud-bigquery-datapolicies==0.6.2
 google-api-python-client
 pytz
 pandas
